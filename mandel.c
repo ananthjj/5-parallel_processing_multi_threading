@@ -6,9 +6,29 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+struct thread_args{
+  struct bitmap* bm;
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
+  int max;
+};
+
+struct image_args{
+  int height;
+  double xCenter;
+  double yCenter;
+};
+  
+
 int iteration_to_color(int i, int max);
 int iterations_at_point(double x, double y, int max);
-void compute_image(struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max);
+void* compute_image(struct thread_args *args);
+struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads);
+
+		   //struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max);
 
 void show_help()
 {
@@ -42,11 +62,12 @@ int main(int argc, char* argv[])
     int image_width = 500;
     int image_height = 500;
     int max = 1000;
+    size_t tNum = 1;
 
     // For each command line argument given,
     // override the appropriate configuration value.
 
-    while ((c = getopt(argc, argv, "x:y:s:W:H:m:o:h")) != -1) {
+    while ((c = getopt(argc, argv, "x:y:s:W:H:m:o:h:n")) != -1) {
         switch (c) {
         case 'x':
             xcenter = atof(optarg);
@@ -73,6 +94,9 @@ int main(int argc, char* argv[])
             show_help();
             exit(1);
             break;
+	case 'n':
+	    tNum = atoi(optarg);
+	    break;
         }
     }
 
@@ -86,7 +110,16 @@ int main(int argc, char* argv[])
     bitmap_reset(bm, MAKE_RGBA(0, 0, 255, 0));
 
     // Compute the Mandelbrot image
-    compute_image(bm, xcenter - scale, xcenter + scale, ycenter - scale, ycenter + scale, max);
+    struct image_args* v = split_image(bm, xcenter, ycenter, tNum);
+    struct thread_args *arr = (struct thread_args*) calloc(tNum, size_of(struct thread_args));
+    pthread_t *pt = (pthread_t *) calloc(tNum, size_of(pthread_t));
+      for (size_t i = 0; i < tNum; i++){
+	//arr[i].
+	  //pthread_create(compute_image);
+	
+      }
+		    
+		  // bm, xcenter - scale, xcenter + scale, ycenter - scale, ycenter + scale, max);
 
     // Save the image in the stated file.
     if (!bitmap_save(bm, outfile)) {
@@ -102,8 +135,12 @@ Compute an entire Mandelbrot image, writing each point to the given bitmap.
 Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
 */
 
-void compute_image(struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max)
+   void * compute_image( struct thread_args *args )
+   //  void compute_image(struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max)
 {
+
+    pthread_t myid = pthread_self();
+      
     int i, j;
 
     int width = bitmap_width(bm);
@@ -126,6 +163,28 @@ void compute_image(struct bitmap* bm, double xmin, double xmax, double ymin, dou
             bitmap_set(bm, i, j, iters);
         }
     }
+    pthread_exit(NULL);
+    return 0;
+}
+
+struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads) {
+  int rows = bitmap_height(bm);
+  int cols = bitmap_width(bm);
+
+  struct image_args*  v = (struct image_args*) calloc(threads, size_of(struct image_args));
+
+  for (size_t i = 0; i < threads; i++){
+    int star = cols / threads* i;
+    int end = cols / threads * (i + 1);
+	  if (i == threads - 1) {
+	    end = cols;
+	  }
+	  v[i].xCenter = x;
+	  v[i].yCenter = y;
+	  v[i].height = rows/threads;
+		        
+  }
+  return  v;
 }
 
 /*
