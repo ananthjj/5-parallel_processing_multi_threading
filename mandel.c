@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 
 struct thread_args{
@@ -16,17 +17,18 @@ struct thread_args{
   int max;
 };
 
+/*
 struct image_args{
   int height;
   double xCenter;
   double yCenter;
-};
+  };*/
   
 
 int iteration_to_color(int i, int max);
 int iterations_at_point(double x, double y, int max);
 void* compute_image(struct thread_args *args);
-struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads);
+//struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads);
 
 		   //struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max);
 
@@ -41,6 +43,7 @@ void show_help()
     printf("-W <pixels> Width of the image in pixels. (default=500)\n");
     printf("-H <pixels> Height of the image in pixels. (default=500)\n");
     printf("-o <file>   Set output file. (default=mandel.bmp)\n");
+    printf("-n <threads> Number of threads. (default=1)\n");
     printf("-h          Show this help text.\n");
     printf("\nSome examples are:\n");
     printf("mandel -x -0.5 -y -0.5 -s 0.2\n");
@@ -64,10 +67,13 @@ int main(int argc, char* argv[])
     int max = 1000;
     size_t tNum = 1;
 
+    clock_t start, end;
+    start = clock();
+    
     // For each command line argument given,
     // override the appropriate configuration value.
 
-    while ((c = getopt(argc, argv, "x:y:s:W:H:m:o:h:n")) != -1) {
+    while ((c = getopt(argc, argv, "x:y:s:W:H:m:o:n:h")) != -1) {
         switch (c) {
         case 'x':
             xcenter = atof(optarg);
@@ -90,13 +96,13 @@ int main(int argc, char* argv[])
         case 'o':
             outfile = optarg;
             break;
-        case 'h':
-            show_help();
-            exit(1);
-            break;
 	case 'n':
 	    tNum = atoi(optarg);
 	    break;
+	case 'h':
+            show_help();
+            exit(1);
+            break;
         }
     }
 
@@ -110,20 +116,33 @@ int main(int argc, char* argv[])
     bitmap_reset(bm, MAKE_RGBA(0, 0, 255, 0));
 
     // Compute the Mandelbrot image
-    struct image_args* v = split_image(bm, xcenter, ycenter, tNum);
-    struct thread_args *arr = (struct thread_args*) calloc(tNum, size_of(struct thread_args));
-    pthread_t *pt = (pthread_t *) calloc(tNum, size_of(pthread_t));
+    //struct image_args* v = split_image(bm, xcenter, ycenter, tNum);
+    struct thread_args *arr = (struct thread_args*) calloc(tNum, sizeof(struct thread_args));
+    pthread_t *pt = (pthread_t *) calloc(tNum, sizeof(pthread_t));
       for (size_t i = 0; i < tNum; i++){
-	//arr[i].
-	  //pthread_create(compute_image);
-	
+	arr[i].bm = bm;
+	arr[i].xmin = xcenter - scale;
+	arr[i].xmax = xcenter + scale;
+	arr[i].ymin = ycenter - scale;
+	arr[i].ymax = ycenter + scale;
+	arr[i].max = max;
+	pthread_create(&pt[i], NULL, compute_image, &arr[i]);
       }
+      for (size_t i = 0; i < tNum; i++){
+		pthread_join(pt[i], NULL);
+	}
 		    
 		  // bm, xcenter - scale, xcenter + scale, ycenter - scale, ycenter + scale, max);
 
+      free(arr);
+      free(pt);
+      end = clock();
+      double duration = (end - start)/CLOCKS_PER_SEC;
+      printf("Duration taken: %lf", duration);
     // Save the image in the stated file.
     if (!bitmap_save(bm, outfile)) {
         fprintf(stderr, "mandel: couldn't write to %s: %s\n", outfile, strerror(errno));
+	
         return 1;
     }
 
@@ -143,8 +162,8 @@ Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
       
     int i, j;
 
-    int width = bitmap_width(bm);
-    int height = bitmap_height(bm);
+    int width = bitmap_width(args->bm);
+    int height = bitmap_height(args->bm);
 
     // For every pixel in the image...
 
@@ -153,21 +172,21 @@ Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
         for (i = 0; i < width; i++) {
 
             // Determine the point in x,y space for that pixel.
-            double x = xmin + i * (xmax - xmin) / width;
-            double y = ymin + j * (ymax - ymin) / height;
+            double x = args->xmin + i * (args->xmax - args->xmin) / width;
+            double y = args->ymin + j * (args->ymax - args->ymin) / height;
 
             // Compute the iterations at that point.
-            int iters = iterations_at_point(x, y, max);
+            int iters = iterations_at_point(x, y, args->max);
 
             // Set the pixel in the bitmap.
-            bitmap_set(bm, i, j, iters);
+            bitmap_set(args->bm, i, j, iters);
         }
     }
     pthread_exit(NULL);
     return 0;
 }
 
-struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads) {
+/*struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads) {
   int rows = bitmap_height(bm);
   int cols = bitmap_width(bm);
 
@@ -185,7 +204,7 @@ struct image_args* split_image(struct bitmap* bm, double x, double y, size_t thr
 		        
   }
   return  v;
-}
+  }*/
 
 /*
 Return the number of iterations at point x, y
