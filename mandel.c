@@ -109,8 +109,8 @@ int main(int argc, char* argv[])
       printf("Too many threads requested. Using only %d threads instead.", image_height);
       tNum = image_height;
     }
-    struct thread_args *arr = (struct thread_args*) malloc(image_height * sizeof(struct thread_args));
-    pthread_t *pt = (pthread_t *) malloc(image_height *  sizeof(pthread_t));
+    struct thread_args *arr = (struct thread_args*) malloc(tNum * sizeof(struct thread_args));
+    pthread_t *pt = (pthread_t *) malloc(tNum *  sizeof(pthread_t));
     int bandHt = image_height/tNum;
       for (size_t i = 0; i < tNum; i++){
 	arr[i].bm = bm;
