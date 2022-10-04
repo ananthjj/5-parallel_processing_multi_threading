@@ -15,22 +15,14 @@ struct thread_args{
   double ymin;
   double ymax;
   int max;
+  int htMin;
+  int htMax;
 };
-
-/*
-struct image_args{
-  int height;
-  double xCenter;
-  double yCenter;
-  };*/
   
 
 int iteration_to_color(int i, int max);
 int iterations_at_point(double x, double y, int max);
 void* compute_image(struct thread_args *args);
-//struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads);
-
-		   //struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max);
 
 void show_help()
 {
@@ -66,10 +58,7 @@ int main(int argc, char* argv[])
     int image_height = 500;
     int max = 1000;
     size_t tNum = 1;
-
-    clock_t start, end;
-    start = clock();
-    
+  
     // For each command line argument given,
     // override the appropriate configuration value.
 
@@ -116,9 +105,13 @@ int main(int argc, char* argv[])
     bitmap_reset(bm, MAKE_RGBA(0, 0, 255, 0));
 
     // Compute the Mandelbrot image
-    //struct image_args* v = split_image(bm, xcenter, ycenter, tNum);
-    struct thread_args *arr = (struct thread_args*) calloc(tNum, sizeof(struct thread_args));
-    pthread_t *pt = (pthread_t *) calloc(tNum, sizeof(pthread_t));
+    if (image_height < tNum){
+      printf("Too many threads requested. Using only %d threads instead.", image_height);
+      tNum = image_height;
+    }
+    struct thread_args *arr = (struct thread_args*) malloc(image_height * sizeof(struct thread_args));
+    pthread_t *pt = (pthread_t *) malloc(image_height *  sizeof(pthread_t));
+    int bandHt = image_height/tNum;
       for (size_t i = 0; i < tNum; i++){
 	arr[i].bm = bm;
 	arr[i].xmin = xcenter - scale;
@@ -126,19 +119,21 @@ int main(int argc, char* argv[])
 	arr[i].ymin = ycenter - scale;
 	arr[i].ymax = ycenter + scale;
 	arr[i].max = max;
-	pthread_create(&pt[i], NULL, compute_image, &arr[i]);
+	arr[i].htMin = i * bandHt;
+	if (i == tNum - 1)
+	  arr[i].htMax = image_height;
+	else
+	  arr[i].htMax = (i+1) * bandHt;
+	pthread_create(&pt[i], NULL, compute_image, (void *)&arr[i]);
       }
       for (size_t i = 0; i < tNum; i++){
 		pthread_join(pt[i], NULL);
 	}
-		    
-		  // bm, xcenter - scale, xcenter + scale, ycenter - scale, ycenter + scale, max);
+		 
 
       free(arr);
       free(pt);
-      end = clock();
-      double duration = (end - start)/CLOCKS_PER_SEC;
-      printf("Duration taken: %lf", duration);
+      
     // Save the image in the stated file.
     if (!bitmap_save(bm, outfile)) {
         fprintf(stderr, "mandel: couldn't write to %s: %s\n", outfile, strerror(errno));
@@ -155,19 +150,19 @@ Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
 */
 
    void * compute_image( struct thread_args *args )
-   //  void compute_image(struct bitmap* bm, double xmin, double xmax, double ymin, double ymax, int max)
 {
 
-    pthread_t myid = pthread_self();
+  //pthread_t myid = pthread_self();
       
     int i, j;
 
     int width = bitmap_width(args->bm);
     int height = bitmap_height(args->bm);
 
+
     // For every pixel in the image...
 
-    for (j = 0; j < height; j++) {
+    for (j = args->htMin; j < args->htMax; j++) {
 
         for (i = 0; i < width; i++) {
 
@@ -182,29 +177,10 @@ Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
             bitmap_set(args->bm, i, j, iters);
         }
     }
+
     pthread_exit(NULL);
     return 0;
 }
-
-/*struct image_args* split_image(struct bitmap* bm, double x, double y, size_t threads) {
-  int rows = bitmap_height(bm);
-  int cols = bitmap_width(bm);
-
-  struct image_args*  v = (struct image_args*) calloc(threads, size_of(struct image_args));
-
-  for (size_t i = 0; i < threads; i++){
-    int star = cols / threads* i;
-    int end = cols / threads * (i + 1);
-	  if (i == threads - 1) {
-	    end = cols;
-	  }
-	  v[i].xCenter = x;
-	  v[i].yCenter = y;
-	  v[i].height = rows/threads;
-		        
-  }
-  return  v;
-  }*/
 
 /*
 Return the number of iterations at point x, y
